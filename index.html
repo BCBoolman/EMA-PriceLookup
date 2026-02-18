@@ -17,7 +17,6 @@
 
         body { font-family: 'Segoe UI', sans-serif; background-color: var(--bg); color: #1e293b; padding: 20px; display: flex; flex-direction: column; align-items: center; }
         
-        /* Container styling with Logo placement */
         .container, .cart-container { 
             background: white; 
             padding: 25px; 
@@ -59,6 +58,11 @@
         .extra-opt { color: #dc2626; font-weight: 600; font-size: 0.85rem; display: block; margin-top: 2px; }
         
         .grand-total { margin-top: 20px; text-align: right; font-size: 1.8rem; font-weight: 800; color: var(--primary); }
+        .cart-actions { display: flex; gap: 10px; margin-top: 20px; justify-content: flex-end; }
+        
+        .btn-secondary { background-color: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; padding: 10px 20px; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        .btn-secondary:hover { background-color: #e2e8f0; }
+
         .remove-btn { color: var(--primary); cursor: pointer; text-decoration: underline; font-size: 0.8rem; border: none; background: none; padding: 0; margin-top: 10px; }
     </style>
 </head>
@@ -70,7 +74,7 @@
             <h2>Price Configurator</h2>
         </div>
         <div class="logo-box">
-            <img src="https://lirp.cdn-website.com/989d3493/dms3rep/multi/opt/zmbJX0ObTsmOY9cAxxS3_EMA+Netherlands_v1.0-1920w.png" alt="EMA Logo">
+            <img src="https://via.placeholder.com/150x50?text=EMA+Logo" alt="EMA Logo">
         </div>
     </div>
     
@@ -110,9 +114,15 @@
     <h3>Order Overview</h3>
     <div id="cart-items"></div>
     <div class="grand-total" id="grand-total-display">Total: € 0.00</div>
+    
+    <div class="cart-actions">
+        <button class="btn-secondary" onclick="copyCartToClipboard()">📋 Copy Selection</button>
+        <button class="btn-secondary" style="color: var(--primary)" onclick="clearCart()">🗑 Clear All</button>
+    </div>
 </div>
 
 <script>
+// Logic remains consistent with previous versions
 const baseSheetURL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQdeTFdaPb_8qPBhm-NlXIXmoH9KxwEfqOucxBG40OShY72eJW6uaR-84C7pmO7WcP9WgVzmWH9vGd_/pub?single=true&output=csv';
 const priceGID = '0'; 
 const stockGID = 'HIER_JE_GID'; 
@@ -127,13 +137,11 @@ async function initialiseren() {
         const pResp = await fetch(`${baseSheetURL}&gid=${priceGID}`);
         const pText = await pResp.text();
         tabelData = pText.split(/\r?\n/).slice(1).map(parsePrijsRegel).filter(i => i);
-
         try {
             const sResp = await fetch(`${baseSheetURL}&gid=${stockGID}`);
             const sText = await sResp.text();
             parseVoorraad(sText);
         } catch (e) { console.warn("Stock GID not found."); }
-
         updateDropdowns(0);
         document.getElementById('loader').style.display = 'none';
         document.getElementById('main-ui').style.display = 'block';
@@ -191,9 +199,7 @@ function updateDropdowns(start) {
             for (let j = 0; j < i; j++) { if (picks[j] && item.kenmerken[j] !== picks[j]) return false; }
             return true;
         });
-        
         const opts = [...new Set(filtered.map(item => item.kenmerken[i]))].sort((a,b) => a.localeCompare(b, undefined, {numeric:true}));
-        
         let html = '<option value="">Select...</option>';
         opts.forEach(o => {
             let label = o;
@@ -210,13 +216,11 @@ function updateDropdowns(start) {
 function updateMainUI() {
     const picks = [0,1,2,3,4].map(i => document.getElementById(`col${i}`).value);
     const listDiv = document.getElementById('modifier-list');
-    
     if (picks.includes("")) { 
         listDiv.innerHTML = "Select motor details..."; 
         lastType = "";
         return; 
     }
-
     const currentType = picks[4];
     if (currentType !== lastType) {
         lastType = currentType;
@@ -235,7 +239,6 @@ function updateMainUI() {
 function addToCart() {
     const picks = [0,1,2,3,4].map(i => document.getElementById(`col${i}`).value);
     if (picks.includes("")) return;
-
     const match = tabelData.find(item => item.kenmerken.every((v, i) => v === picks[i]));
     const discount = parseFloat(document.getElementById('global-discount').value) || 0;
     const stockCount = voorraadData[picks[4]] || 0;
@@ -247,7 +250,6 @@ function addToCart() {
         const name = cb.getAttribute('data-name');
         const val = parseFloat(cb.value);
         extraPrice += (match.prijs * (val/100));
-
         const n = name.toUpperCase();
         if (["B5", "B35", "B14A", "V1"].some(m => n.includes(m))) mounting = name;
         else if (n.includes("IP66")) protection = "IP66";
@@ -277,7 +279,6 @@ function renderCart() {
     const container = document.getElementById('cart-items');
     const section = document.getElementById('cart-section');
     if (cart.length > 0) section.style.display = 'block';
-    
     container.innerHTML = '';
     let grandTotal = 0;
     const globalDiscount = parseFloat(document.getElementById('global-discount').value) || 0;
@@ -302,7 +303,7 @@ function renderCart() {
                 Insulation: ${item.specs.ins} | Protection Class: ${item.specs.prt}<br>
                 Mounting: ${item.specs.mnt} | Material: ${item.specs.mat.toLowerCase()}
                 ${item.specs.others.map(o => `<span class="extra-opt">+ ${o}</span>`).join('')}
-                <button class="remove-btn" onclick="removeFromCart(${index})">Remove item</button>
+                <br><button class="remove-btn" onclick="removeFromCart(${index})">Remove item</button>
             </div>
         `;
     });
@@ -313,6 +314,48 @@ function removeFromCart(index) {
     cart.splice(index, 1);
     if (cart.length === 0) document.getElementById('cart-section').style.display = 'none';
     renderCart();
+}
+
+function clearCart() {
+    if (confirm("Are you sure you want to clear the entire list?")) {
+        cart = [];
+        document.getElementById('cart-section').style.display = 'none';
+        renderCart();
+    }
+}
+
+function copyCartToClipboard() {
+    let textToCopy = "ORDER OVERVIEW - EMA Price Configurator\n";
+    textToCopy += "========================================\n\n";
+    
+    const globalDiscount = parseFloat(document.getElementById('global-discount').value) || 0;
+    let grandTotal = 0;
+
+    cart.forEach((item, index) => {
+        const finalPrice = item.total * (1 - (globalDiscount / 100));
+        grandTotal += finalPrice;
+        const deliv = item.inStock ? "on stock, while stock last" : "4-6 weeks (to be confirmed)";
+        
+        textToCopy += `${index + 1}. 1x ${item.type}\n`;
+        textToCopy += `   Price: € ${item.base.toLocaleString('en-US', {minimumFractionDigits: 2})} each\n`;
+        textToCopy += `   Copper surcharge: ${item.copper}%\n`;
+        textToCopy += `   Discount: ${globalDiscount}%\n`;
+        textToCopy += `   Total Price: € ${finalPrice.toLocaleString('en-US', {minimumFractionDigits: 2})} each\n`;
+        textToCopy += `   Delivery time: ${deliv}\n`;
+        textToCopy += `   Specs: ${item.specs.eff}, ${item.specs.pow}kW, ${item.specs.pol} poles, ${item.specs.vol}, ${item.specs.mnt}, ${item.specs.mat}\n`;
+        if(item.specs.others.length > 0) textToCopy += `   Extras: ${item.specs.others.join(', ')}\n`;
+        textToCopy += "\n";
+    });
+
+    textToCopy += "----------------------------------------\n";
+    textToCopy += `GRAND TOTAL: € ${grandTotal.toLocaleString('en-US', {minimumFractionDigits: 2})}\n`;
+    textToCopy += "----------------------------------------\n";
+
+    navigator.clipboard.writeText(textToCopy).then(() => {
+        alert("Selection copied to clipboard!");
+    }).catch(err => {
+        console.error('Failed to copy: ', err);
+    });
 }
 
 initialiseren();
