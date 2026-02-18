@@ -54,7 +54,7 @@
     <div class="config-row">
         <div class="config-group">
             <label>Discount (%)</label>
-            <input type="number" id="global-discount" value="15" onchange="renderCart()">
+            <input type="number" id="global-discount" value="0" onchange="renderCart()">
         </div>
         <div id="stock-status-box" class="stock-indicator">
             <span id="stock-dot" class="dot dot-gray"></span>
@@ -87,6 +87,7 @@
 </div>
 
 <script>
+// Change this GID to your stock tab GID
 const baseSheetURL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQdeTFdaPb_8qPBhm-NlXIXmoH9KxwEfqOucxBG40OShY72eJW6uaR-84C7pmO7WcP9WgVzmWH9vGd_/pub?single=true&output=csv';
 const priceGID = '0'; 
 const stockGID = 'HIER_JE_GID'; 
@@ -114,20 +115,38 @@ async function initialiseren() {
     } catch (e) { document.getElementById('loader').textContent = "Error loading data."; }
 }
 
+// Robust number cleaner for currency formats (handles 1.250,00 and 1,250.00)
+function cleanNumber(val) {
+    if (!val) return 0;
+    let s = val.toString().replace(/[^\d,.-]/g, ''); // Keep digits, commas, dots, minus
+    if (s.includes(',') && s.includes('.')) {
+        if (s.lastIndexOf('.') > s.lastIndexOf(',')) s = s.replace(/,/g, '');
+        else s = s.replace(/\./g, '').replace(',', '.');
+    } else {
+        s = s.replace(',', '.');
+    }
+    return parseFloat(s) || 0;
+}
+
 function parsePrijsRegel(r) {
     const cols = r.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
     if (cols.length < 6) return null;
+    
     const mods = {};
     const modCel = cols[6]?.replace(/"/g, '').trim() || "";
     if (modCel) {
         modCel.split(/,(?=[^:]+:)/).forEach(m => {
             const idx = m.lastIndexOf(':');
-            if (idx !== -1) mods[m.substring(0, idx).trim()] = parseFloat(m.substring(idx+1).replace(',','.'));
+            if (idx !== -1) {
+                const modName = m.substring(0, idx).trim();
+                const modVal = cleanNumber(m.substring(idx+1));
+                mods[modName] = modVal;
+            }
         });
     }
     return {
         kenmerken: cols.slice(0, 5).map(s => s.trim().replace(/"/g, '')),
-        prijs: parseFloat(cols[5].replace(/[^\d,.]/g, '').replace(',', '.')) || 0,
+        prijs: cleanNumber(cols[5]),
         modifiers: mods
     };
 }
@@ -241,12 +260,14 @@ function addToCart() {
 
 function renderCart() {
     const container = document.getElementById('cart-items');
-    document.getElementById('cart-section').style.display = 'block';
+    const section = document.getElementById('cart-section');
+    if (cart.length > 0) section.style.display = 'block';
+    
     container.innerHTML = '';
     let grandTotal = 0;
     const globalDiscount = parseFloat(document.getElementById('global-discount').value) || 0;
 
-    cart.forEach(item => {
+    cart.forEach((item, index) => {
         const finalPrice = item.total * (1 - (globalDiscount / 100));
         grandTotal += finalPrice;
         const deliv = item.stock === "in-stock" ? "on stock, while stock last" : "4-6 weeks (to be confirmed)";
@@ -256,24 +277,30 @@ function renderCart() {
                 <span class="item-title">1x ${item.type}</span>
                 Brand: Electric Motors Amsterdam (EMA)<br>
                 Safe Area Motor<br>
-                Price: € ${item.base.toFixed(2)} each<br>
+                Price: € ${item.base.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})} each<br>
                 Copper surcharge: ${item.copper}%<br>
                 Discount: ${globalDiscount}%<br>
-                <strong>Total Price: € ${finalPrice.toFixed(2)} each</strong><br>
+                <strong>Total Price: € ${finalPrice.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})} each</strong><br>
                 Delivery time: ${deliv}<br>
                 Delivery method: EXW EMA<br>
                 Payment method: 30 days after delivery.<br>
                 Efficiency class: ${item.specs.eff}<br>
                 Power: ${item.specs.pow} kW | Poles: ${item.specs.pol}<br>
                 Voltage: ${item.specs.vol} | Frequency: ${item.specs.frq}<br>
-                Phase: 3 Phase<br>
                 Insulation: ${item.specs.ins} | Protection Class: ${item.specs.prt}<br>
                 Mounting: ${item.specs.mnt} | Material: ${item.specs.mat.toLowerCase()}
                 ${item.specs.others.map(o => `<span class="extra-opt">+ ${o}</span>`).join('')}
+                <br><button onclick="removeFromCart(${index})" style="background:none; border:none; color:var(--primary); cursor:pointer; text-decoration:underline; padding:0; font-size:0.8rem;">Remove</button>
             </div>
         `;
     });
-    document.getElementById('grand-total-display').textContent = `Total: € ${grandTotal.toFixed(2)}`;
+    document.getElementById('grand-total-display').textContent = `Total: € ${grandTotal.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+}
+
+function removeFromCart(index) {
+    cart.splice(index, 1);
+    if (cart.length === 0) document.getElementById('cart-section').style.display = 'none';
+    renderCart();
 }
 
 initialiseren();
