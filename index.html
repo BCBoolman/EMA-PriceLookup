@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="nl">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Prijs Calculator - Fixed Modifiers</title>
+    <title>EMA Price Calculator - Technical Specifications</title>
     <style>
         :root {
             --primary: #2563eb;
@@ -46,6 +46,8 @@
             transition: border-color 0.2s;
         }
 
+        select:focus { border-color: var(--primary); }
+
         .modifier-section { 
             margin-top: 25px; 
             padding: 20px; 
@@ -70,6 +72,7 @@
         }
 
         .price-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .price-label { font-weight: bold; }
         .price-value { font-size: 1.2rem; font-weight: 800; }
         .total-price { color: var(--success); font-size: 1.8rem; }
 
@@ -80,28 +83,28 @@
 
 <div class="container">
     <h2>Calculator</h2>
-    <div id="loader" class="loading">Data ophalen uit Google Sheets...</div>
+    <div id="loader" class="loading">Fetching data from Google Sheets...</div>
     
     <div id="main-ui" style="display:none;">
-        <div class="select-group"><label>Kolom 1</label><select id="col0" onchange="handleSelectChange(0)"></select></div>
-        <div class="select-group"><label>Kolom 2</label><select id="col1" onchange="handleSelectChange(1)"></select></div>
-        <div class="select-group"><label>Kolom 3</label><select id="col2" onchange="handleSelectChange(2)"></select></div>
-        <div class="select-group"><label>Kolom 4</label><select id="col3" onchange="handleSelectChange(3)"></select></div>
-        <div class="select-group"><label>Kolom 5</label><select id="col4" onchange="handleSelectChange(4)"></select></div>
+        <div class="select-group"><label>Material</label><select id="col0" onchange="handleSelectChange(0)"></select></div>
+        <div class="select-group"><label>Poles</label><select id="col1" onchange="handleSelectChange(1)"></select></div>
+        <div class="select-group"><label>Classification</label><select id="col2" onchange="handleSelectChange(2)"></select></div>
+        <div class="select-group"><label>Power kW</label><select id="col3" onchange="handleSelectChange(3)"></select></div>
+        <div class="select-group"><label>Type</label><select id="col4" onchange="handleSelectChange(4)"></select></div>
 
         <div id="modifier-area" class="modifier-section">
-            <h4>Extra Opties:</h4>
-            <div id="modifier-list">Maak eerst alle keuzes...</div>
+            <h4>Extra Options:</h4>
+            <div id="modifier-list">Please complete all selections...</div>
         </div>
 
         <div class="price-container">
             <div class="price-row">
-                <span class="price-label">Basisprijs:</span>
-                <span id="base-price" class="price-value">€ 0,00</span>
+                <span class="price-label">Base Price:</span>
+                <span id="base-price" class="price-value">€ 0.00</span>
             </div>
             <div class="price-row">
-                <span class="price-label">Totaal:</span>
-                <span id="total-price" class="price-value total-price">€ 0,00</span>
+                <span class="price-label">Total:</span>
+                <span id="total-price" class="price-value total-price">€ 0.00</span>
             </div>
         </div>
     </div>
@@ -122,16 +125,15 @@ async function laadData() {
             const kolommen = regel.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
             if (kolommen.length < 6) return null;
 
-            // Prijs schoonmaken
+            // Clean Price
             let prijsSchoon = kolommen[5].replace(/[^\d,.]/g, '').replace(',', '.');
             let prijsNummer = parseFloat(prijsSchoon);
 
-            // MODIFIERS PARSING (NU OP BASIS VAN KOMMA EN DUBBELE PUNT)
+            // Parse Modifiers (Smart split on comma followed by text:number)
             const modObject = {};
             const modCel = kolommen[6]?.replace(/"/g, '').trim() || "";
             
             if (modCel) {
-                // We splitsen op komma's die gevolgd worden door tekst en een dubbele punt
                 const modOnderdelen = modCel.split(/,(?=[^:]+:)/);
                 modOnderdelen.forEach(m => {
                     const laatsteDubbelePunt = m.lastIndexOf(':');
@@ -156,7 +158,7 @@ async function laadData() {
         document.getElementById('loader').style.display = 'none';
         document.getElementById('main-ui').style.display = 'block';
     } catch (error) {
-        document.getElementById('loader').textContent = "Fout bij laden data.";
+        document.getElementById('loader').textContent = "Error loading data. Check source link.";
     }
 }
 
@@ -193,7 +195,7 @@ function updateDropdowns(startIndex) {
                         .filter(opt => opt && opt.trim() !== "")
                         .sort(slimSorteren);
         
-        select.innerHTML = '<option value="">Maak een keuze...</option>';
+        select.innerHTML = '<option value="">Select option...</option>';
         opties.forEach(opt => {
             const el = document.createElement('option');
             el.value = opt;
@@ -209,16 +211,16 @@ function updateUI() {
     const modList = document.getElementById('modifier-list');
     
     if (!allesGeselecteerd) {
-        modList.innerHTML = 'Maak eerst alle keuzes...';
-        document.getElementById('base-price').textContent = "€ 0,00";
-        document.getElementById('total-price').textContent = "€ 0,00";
+        modList.innerHTML = 'Please complete all selections...';
+        document.getElementById('base-price').textContent = "€ 0.00";
+        document.getElementById('total-price').textContent = "€ 0.00";
         return;
     }
 
     const match = tabelData.find(item => item.kenmerken.every((v, i) => v === keuzes[i]));
 
     if (match) {
-        document.getElementById('base-price').textContent = `€ ${match.prijs.toLocaleString('nl-NL', {minimumFractionDigits: 2})}`;
+        document.getElementById('base-price').textContent = `€ ${match.prijs.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
         
         const modKeys = Object.keys(match.modifiers);
         if (modKeys.length > 0) {
@@ -234,9 +236,11 @@ function updateUI() {
                 modList.appendChild(div);
             });
         } else {
-            modList.innerHTML = 'Geen extra opties.';
+            modList.innerHTML = 'No extra options available.';
         }
         recalc(match.prijs);
+    } else {
+        modList.innerHTML = 'No exact match found for this combination.';
     }
 }
 
@@ -246,7 +250,7 @@ function recalc(base) {
         extraPerc += parseFloat(cb.value) || 0;
     });
     const totaal = base * (1 + (extraPerc / 100));
-    document.getElementById('total-price').textContent = `€ ${totaal.toLocaleString('nl-NL', {minimumFractionDigits: 2})}`;
+    document.getElementById('total-price').textContent = `€ ${totaal.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
 }
 
 laadData();
