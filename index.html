@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Prijs Calculator - Google Sheets Sync</title>
+    <title>Prijs Calculator - Dynamische Opties</title>
     <style>
         :root {
             --primary: #2563eb;
@@ -30,7 +30,7 @@
             width: 100%;
         }
 
-        h2 { margin-top: 0; color: var(--primary); border-bottom: 2px solid #f1f5f9; pb: 10px; }
+        h2 { margin-top: 0; color: var(--primary); border-bottom: 2px solid #f1f5f9; padding-bottom: 10px; }
 
         .select-group { margin-bottom: 15px; }
         label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 5px; color: var(--secondary); }
@@ -47,6 +47,7 @@
         }
 
         select:focus { border-color: var(--primary); }
+        select:disabled { background-color: #f1f5f9; cursor: not-allowed; }
 
         .modifier-section { 
             margin-top: 25px; 
@@ -85,11 +86,11 @@
     <div id="loader" class="loading">Data ophalen uit Google Sheets...</div>
     
     <div id="main-ui" style="display:none;">
-        <div class="select-group"><label>Kolom 1</label><select id="col0" onchange="updateUI()"></select></div>
-        <div class="select-group"><label>Kolom 2</label><select id="col1" onchange="updateUI()"></select></div>
-        <div class="select-group"><label>Kolom 3</label><select id="col2" onchange="updateUI()"></select></div>
-        <div class="select-group"><label>Kolom 4</label><select id="col3" onchange="updateUI()"></select></div>
-        <div class="select-group"><label>Kolom 5</label><select id="col4" onchange="updateUI()"></select></div>
+        <div class="select-group"><label>Kolom 1</label><select id="col0" onchange="handleSelectChange(0)"></select></div>
+        <div class="select-group"><label>Kolom 2</label><select id="col1" onchange="handleSelectChange(1)"></select></div>
+        <div class="select-group"><label>Kolom 3</label><select id="col2" onchange="handleSelectChange(2)"></select></div>
+        <div class="select-group"><label>Kolom 4</label><select id="col3" onchange="handleSelectChange(3)"></select></div>
+        <div class="select-group"><label>Kolom 5</label><select id="col4" onchange="handleSelectChange(4)"></select></div>
 
         <div id="modifier-area" class="modifier-section" style="display:none;">
             <h4>Extra Opties:</h4>
@@ -110,7 +111,6 @@
 </div>
 
 <script>
-// VERVANG DEZE LINK DOOR JOUW GOOGLE SHEETS CSV LINK
 const sheetURL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQdeTFdaPb_8qPBhm-NlXIXmoH9KxwEfqOucxBG40OShY72eJW6uaR-84C7pmO7WcP9WgVzmWH9vGd_/pub?gid=0&single=true&output=csv';
 
 let tabelData = [];
@@ -119,8 +119,6 @@ async function laadData() {
     try {
         const response = await fetch(sheetURL);
         const tekst = await response.text();
-        
-        // Verwerk CSV (komma-gescheiden, negeer komma's tussen quotes)
         const regels = tekst.split(/\r?\n/).slice(1); 
         
         tabelData = regels.map(regel => {
@@ -131,8 +129,10 @@ async function laadData() {
             const modCel = kolommen[6]?.replace(/"/g, '').trim() || "";
             if (modCel) {
                 modCel.split('|').forEach(m => {
-                    const [naam, perc] = m.split(':');
-                    if (naam && perc) modObject[naam.trim()] = parseFloat(perc);
+                    const parts = m.split(':');
+                    if (parts.length === 2) {
+                        modObject[parts[0].trim()] = parseFloat(parts[1]);
+                    }
                 });
             }
 
@@ -143,29 +143,66 @@ async function laadData() {
             };
         }).filter(item => item !== null);
 
-        initDropdowns();
+        updateDropdowns(0); // Vul de eerste kolom
         document.getElementById('loader').style.display = 'none';
         document.getElementById('main-ui').style.display = 'block';
     } catch (error) {
-        document.getElementById('loader').textContent = "Fout bij laden data. Controleer de link.";
+        document.getElementById('loader').textContent = "Fout bij laden data.";
         console.error(error);
     }
 }
 
-function initDropdowns() {
-    for(let i=0; i<5; i++) {
+// Functie die wordt aangeroepen bij elke klik
+function handleSelectChange(index) {
+    // Wis alle keuzes in de kolommen ná degene die veranderd is
+    for (let i = index + 1; i < 5; i++) {
+        document.getElementById(`col${i}`).innerHTML = '';
+    }
+    
+    updateDropdowns(index + 1);
+    updateUI();
+}
+
+function updateDropdowns(startIndex) {
+    // Haal de huidige geselecteerde waarden op
+    const huidigeKeuzes = [];
+    for (let i = 0; i < 5; i++) {
+        huidigeKeuzes.push(document.getElementById(`col${i}`).value);
+    }
+
+    // Loop door de dropdowns vanaf de startIndex
+    for (let i = startIndex; i < 5; i++) {
         const select = document.getElementById(`col${i}`);
-        // Haal unieke opties op voor deze kolom
-        const opties = [...new Set(tabelData.map(item => item.kenmerken[i]))].sort();
         
+        // Filter de tabelData op basis van wat er in de VORIGE kolommen is gekozen
+        const beschikbareData = tabelData.filter(item => {
+            for (let j = 0; j < i; j++) {
+                if (huidigeKeuzes[j] && item.kenmerken[j] !== huidigeKeuzes[j]) {
+                    return false;
+                }
+            }
+            return true;
+        });
+
+        // Haal unieke opties op uit de gefilterde set
+        const opties = [...new Set(beschikbareData.map(item => item.kenmerken[i]))].sort();
+        
+        // Vul de dropdown
+        const vorigeWaarde = select.value;
         select.innerHTML = '<option value="">Maak een keuze...</option>';
+        
         opties.forEach(opt => {
-            if(opt) {
+            if (opt) {
                 const el = document.createElement('option');
-                el.value = opt; el.textContent = opt;
+                el.value = opt;
+                el.textContent = opt;
+                if (opt === vorigeWaarde) el.selected = true;
                 select.appendChild(el);
             }
         });
+
+        // Als er maar 1 optie is (naast de lege), selecteer die dan automatisch? 
+        // Optioneel: select.disabled = (opties.length === 0);
     }
 }
 
@@ -178,6 +215,7 @@ function updateUI() {
         document.getElementById('col4').value
     ];
 
+    // Zoek een exacte match (alleen als alle 5 zijn ingevuld)
     const match = tabelData.find(item => 
         item.kenmerken.every((val, index) => val === keuzes[index])
     );
