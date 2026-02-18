@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EMA Price & Stock Configurator - Fixed</title>
+    <title>EMA Price & Stock Configurator</title>
     <style>
         :root {
             --primary: #dc2626;
@@ -53,16 +53,16 @@
     
     <div class="config-row">
         <div class="config-group">
-            <label>Korting (%)</label>
+            <label>Discount (%)</label>
             <input type="number" id="global-discount" value="15" onchange="renderCart()">
         </div>
         <div id="stock-status-box" class="stock-indicator">
             <span id="stock-dot" class="dot dot-gray"></span>
-            <span id="stock-text">Maak selectie</span>
+            <span id="stock-text">Select motor</span>
         </div>
     </div>
 
-    <div id="loader">Data synchroniseren...</div>
+    <div id="loader">Syncing data with Google Sheets...</div>
     
     <div id="main-ui" style="display:none;">
         <div class="select-group"><label>Material</label><select id="col0" onchange="handleSelectChange(0)"></select></div>
@@ -72,18 +72,18 @@
         <div class="select-group"><label>Type</label><select id="col4" onchange="handleSelectChange(4)"></select></div>
 
         <div id="modifier-area" class="modifier-section">
-            <label>Extra Opties:</label>
-            <div id="modifier-list">Selecteer een motor...</div>
+            <label>Extra Options & Modifications:</label>
+            <div id="modifier-list">Please select a motor to see options...</div>
         </div>
 
-        <button class="btn-add" onclick="addToCart()">+ Toevoegen aan Overzicht</button>
+        <button class="btn-add" onclick="addToCart()">+ Add to Order Overview</button>
     </div>
 </div>
 
 <div class="cart-container" id="cart-section" style="display: none;">
-    <h3>Order Overzicht</h3>
+    <h3>Order Overview</h3>
     <div id="cart-items"></div>
-    <div class="grand-total" id="grand-total-display">Totaal: € 0.00</div>
+    <div class="grand-total" id="grand-total-display">Total: € 0.00</div>
 </div>
 
 <script>
@@ -106,12 +106,12 @@ async function initialiseren() {
             const sResp = await fetch(`${baseSheetURL}&gid=${stockGID}`);
             const sText = await sResp.text();
             parseVoorraad(sText);
-        } catch (e) { console.warn("Voorraad GID niet gevonden."); }
+        } catch (e) { console.warn("Stock GID not found."); }
 
         updateDropdowns(0);
         document.getElementById('loader').style.display = 'none';
         document.getElementById('main-ui').style.display = 'block';
-    } catch (e) { document.getElementById('loader').textContent = "Fout bij laden."; }
+    } catch (e) { document.getElementById('loader').textContent = "Error loading data."; }
 }
 
 function parsePrijsRegel(r) {
@@ -156,7 +156,7 @@ function updateDropdowns(start) {
             return true;
         });
         const opts = [...new Set(filtered.map(item => item.kenmerken[i]))].sort((a,b) => a.localeCompare(b, undefined, {numeric:true}));
-        select.innerHTML = '<option value="">Selecteer...</option>' + opts.map(o => `<option value="${o}">${o}</option>`).join('');
+        select.innerHTML = '<option value="">Select...</option>' + opts.map(o => `<option value="${o}">${o}</option>`).join('');
     }
 }
 
@@ -167,15 +167,14 @@ function updateMainUI() {
     const text = document.getElementById('stock-text');
     
     if (picks.includes("")) { 
-        listDiv.innerHTML = "Selecteer motor gegevens..."; 
-        dot.className = "dot dot-gray"; text.textContent = "Maak selectie";
+        listDiv.innerHTML = "Select motor details..."; 
+        dot.className = "dot dot-gray"; text.textContent = "Select motor";
         lastType = "";
         return; 
     }
 
     const currentType = picks[4];
 
-    // Alleen opnieuw tekenen als het motortype écht veranderd is
     if (currentType !== lastType) {
         lastType = currentType;
         const match = tabelData.find(item => item.kenmerken.every((v, i) => v === picks[i]));
@@ -188,13 +187,12 @@ function updateMainUI() {
             `).join('');
         }
         
-        // Voorraad status direct updaten
         const aantal = voorraadData[currentType] || 0;
         if (aantal > 0) {
-            dot.className = "dot dot-green"; text.textContent = `Op voorraad (${aantal})`;
+            dot.className = "dot dot-green"; text.textContent = `In stock (${aantal})`;
             text.dataset.status = "in-stock";
         } else {
-            dot.className = "dot dot-red"; text.textContent = "Geen voorraad";
+            dot.className = "dot dot-red"; text.textContent = "Out of stock";
             text.dataset.status = "no-stock";
         }
     }
@@ -264,16 +262,18 @@ function renderCart() {
                 <strong>Total Price: € ${finalPrice.toFixed(2)} each</strong><br>
                 Delivery time: ${deliv}<br>
                 Delivery method: EXW EMA<br>
+                Payment method: 30 days after delivery.<br>
                 Efficiency class: ${item.specs.eff}<br>
                 Power: ${item.specs.pow} kW | Poles: ${item.specs.pol}<br>
                 Voltage: ${item.specs.vol} | Frequency: ${item.specs.frq}<br>
-                Insulation: ${item.specs.ins} | Protection: ${item.specs.prt}<br>
+                Phase: 3 Phase<br>
+                Insulation: ${item.specs.ins} | Protection Class: ${item.specs.prt}<br>
                 Mounting: ${item.specs.mnt} | Material: ${item.specs.mat.toLowerCase()}
                 ${item.specs.others.map(o => `<span class="extra-opt">+ ${o}</span>`).join('')}
             </div>
         `;
     });
-    document.getElementById('grand-total-display').textContent = `Totaal: € ${grandTotal.toFixed(2)}`;
+    document.getElementById('grand-total-display').textContent = `Total: € ${grandTotal.toFixed(2)}`;
 }
 
 initialiseren();
