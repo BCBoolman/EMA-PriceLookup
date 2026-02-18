@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EMA Price & Stock Configurator</title>
+    <title>EMA Price & Stock Configurator - Fixed</title>
     <style>
         :root {
             --primary: #dc2626;
@@ -31,11 +31,10 @@
         .select-group { margin-bottom: 12px; }
         label { display: block; font-size: 0.8rem; font-weight: 700; margin-bottom: 4px; color: var(--secondary); text-transform: uppercase; }
         select, input[type="number"] { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 1rem; outline: none; }
-        select:focus { border-color: var(--primary); }
 
         .modifier-section { margin-top: 20px; padding: 15px; background: #fef2f2; border-radius: 8px; border: 1px solid #fee2e2; }
         .modifier-item { display: flex; align-items: center; margin-bottom: 8px; cursor: pointer; font-size: 0.9rem; }
-        .modifier-item input { margin-right: 10px; accent-color: var(--primary); width: 18px; height: 18px; }
+        .modifier-item input { margin-right: 10px; accent-color: var(--primary); width: 18px; height: 18px; cursor: pointer; }
 
         .btn-add { background-color: var(--primary); color: white; border: none; padding: 15px; border-radius: 6px; font-weight: bold; cursor: pointer; width: 100%; margin-top: 15px; font-size: 1.1rem; transition: 0.2s; }
         .btn-add:hover { background-color: var(--primary-hover); }
@@ -54,8 +53,8 @@
     
     <div class="config-row">
         <div class="config-group">
-            <label>Handmatige Korting (%)</label>
-            <input type="number" id="global-discount" value="15" onchange="updateUI()">
+            <label>Korting (%)</label>
+            <input type="number" id="global-discount" value="15" onchange="renderCart()">
         </div>
         <div id="stock-status-box" class="stock-indicator">
             <span id="stock-dot" class="dot dot-gray"></span>
@@ -63,7 +62,7 @@
         </div>
     </div>
 
-    <div id="loader">Data synchroniseren met Google Sheets...</div>
+    <div id="loader">Data synchroniseren...</div>
     
     <div id="main-ui" style="display:none;">
         <div class="select-group"><label>Material</label><select id="col0" onchange="handleSelectChange(0)"></select></div>
@@ -73,8 +72,8 @@
         <div class="select-group"><label>Type</label><select id="col4" onchange="handleSelectChange(4)"></select></div>
 
         <div id="modifier-area" class="modifier-section">
-            <label>Extra Opties & Aanpassingen:</label>
-            <div id="modifier-list">Selecteer een motor om beschikbare opties te laden...</div>
+            <label>Extra Opties:</label>
+            <div id="modifier-list">Selecteer een motor...</div>
         </div>
 
         <button class="btn-add" onclick="addToCart()">+ Toevoegen aan Overzicht</button>
@@ -82,39 +81,37 @@
 </div>
 
 <div class="cart-container" id="cart-section" style="display: none;">
-    <h3>Gegenereerd Order Overzicht</h3>
+    <h3>Order Overzicht</h3>
     <div id="cart-items"></div>
     <div class="grand-total" id="grand-total-display">Totaal: € 0.00</div>
 </div>
 
 <script>
-// CONFIGURATIE:
 const baseSheetURL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQdeTFdaPb_8qPBhm-NlXIXmoH9KxwEfqOucxBG40OShY72eJW6uaR-84C7pmO7WcP9WgVzmWH9vGd_/pub?single=true&output=csv';
 const priceGID = '0'; 
-const stockGID = '713664103'; // PAS DIT AAN naar de GID van je voorraadblad
+const stockGID = 'HIER_JE_GID'; 
 
 let tabelData = [];
-let voorraadData = {}; // Format: { "EMA3-90L-2": 5 }
+let voorraadData = {}; 
 let cart = [];
+let lastType = "";
 
 async function initialiseren() {
     try {
-        // 1. Prijzen laden
         const pResp = await fetch(`${baseSheetURL}&gid=${priceGID}`);
         const pText = await pResp.text();
         tabelData = pText.split(/\r?\n/).slice(1).map(parsePrijsRegel).filter(i => i);
 
-        // 2. Voorraad laden
         try {
             const sResp = await fetch(`${baseSheetURL}&gid=${stockGID}`);
             const sText = await sResp.text();
             parseVoorraad(sText);
-        } catch (e) { console.warn("Voorraadblad niet bereikbaar of GID onjuist."); }
+        } catch (e) { console.warn("Voorraad GID niet gevonden."); }
 
         updateDropdowns(0);
         document.getElementById('loader').style.display = 'none';
         document.getElementById('main-ui').style.display = 'block';
-    } catch (e) { document.getElementById('loader').textContent = "Systeemfout: Kan data niet ophalen."; }
+    } catch (e) { document.getElementById('loader').textContent = "Fout bij laden."; }
 }
 
 function parsePrijsRegel(r) {
@@ -136,13 +133,10 @@ function parsePrijsRegel(r) {
 }
 
 function parseVoorraad(csv) {
-    const regels = csv.split(/\r?\n/).slice(1);
-    regels.forEach(r => {
+    csv.split(/\r?\n/).slice(1).forEach(r => {
         const cols = r.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
         if (cols.length >= 2) {
-            const type = cols[0].trim().replace(/"/g, '');
-            const aantal = parseInt(cols[1].replace(/[^\d]/g, '')) || 0;
-            voorraadData[type] = aantal;
+            voorraadData[cols[0].trim().replace(/"/g, '')] = parseInt(cols[1].replace(/[^\d]/g, '')) || 0;
         }
     });
 }
@@ -150,7 +144,7 @@ function parseVoorraad(csv) {
 function handleSelectChange(idx) {
     for (let i = idx + 1; i < 5; i++) document.getElementById(`col${i}`).innerHTML = '';
     updateDropdowns(idx + 1);
-    updateUI();
+    updateMainUI();
 }
 
 function updateDropdowns(start) {
@@ -166,40 +160,43 @@ function updateDropdowns(start) {
     }
 }
 
-function updateUI() {
+function updateMainUI() {
     const picks = [0,1,2,3,4].map(i => document.getElementById(`col${i}`).value);
-    const list = document.getElementById('modifier-list');
+    const listDiv = document.getElementById('modifier-list');
     const dot = document.getElementById('stock-dot');
     const text = document.getElementById('stock-text');
     
     if (picks.includes("")) { 
-        list.innerHTML = "Selecteer alle motor specificaties..."; 
-        dot.className = "dot dot-gray";
-        text.textContent = "Maak selectie";
+        listDiv.innerHTML = "Selecteer motor gegevens..."; 
+        dot.className = "dot dot-gray"; text.textContent = "Maak selectie";
+        lastType = "";
         return; 
     }
 
-    // Voorraad check
-    const typeNaam = picks[4];
-    const aantal = voorraadData[typeNaam] || 0;
-    if (aantal > 0) {
-        dot.className = "dot dot-green";
-        text.textContent = `Op voorraad (${aantal})`;
-        text.dataset.status = "in-stock";
-    } else {
-        dot.className = "dot dot-red";
-        text.textContent = "Geen voorraad";
-        text.dataset.status = "no-stock";
-    }
+    const currentType = picks[4];
 
-    const match = tabelData.find(item => item.kenmerken.every((v, i) => v === picks[i]));
-    if (match) {
-        list.innerHTML = Object.entries(match.modifiers).map(([naam, perc]) => `
-            <div class="modifier-item">
-                <input type="checkbox" class="mod-check" data-name="${naam}" value="${perc}" onchange="updateUI()">
-                <span>${naam} (+${perc}%)</span>
-            </div>
-        `).join('');
+    // Alleen opnieuw tekenen als het motortype écht veranderd is
+    if (currentType !== lastType) {
+        lastType = currentType;
+        const match = tabelData.find(item => item.kenmerken.every((v, i) => v === picks[i]));
+        if (match) {
+            listDiv.innerHTML = Object.entries(match.modifiers).map(([naam, perc]) => `
+                <div class="modifier-item">
+                    <input type="checkbox" class="mod-check" data-name="${naam}" value="${perc}">
+                    <span>${naam} (+${perc}%)</span>
+                </div>
+            `).join('');
+        }
+        
+        // Voorraad status direct updaten
+        const aantal = voorraadData[currentType] || 0;
+        if (aantal > 0) {
+            dot.className = "dot dot-green"; text.textContent = `Op voorraad (${aantal})`;
+            text.dataset.status = "in-stock";
+        } else {
+            dot.className = "dot dot-red"; text.textContent = "Geen voorraad";
+            text.dataset.status = "no-stock";
+        }
     }
 }
 
@@ -249,11 +246,12 @@ function renderCart() {
     document.getElementById('cart-section').style.display = 'block';
     container.innerHTML = '';
     let grandTotal = 0;
+    const globalDiscount = parseFloat(document.getElementById('global-discount').value) || 0;
 
     cart.forEach(item => {
-        const finalPricePerItem = item.total * (1 - (item.discount / 100));
-        grandTotal += finalPricePerItem;
-        const deliveryText = item.stock === "in-stock" ? "on stock, while stock last" : "4-6 weeks (to be confirmed)";
+        const finalPrice = item.total * (1 - (globalDiscount / 100));
+        grandTotal += finalPrice;
+        const deliv = item.stock === "in-stock" ? "on stock, while stock last" : "4-6 weeks (to be confirmed)";
 
         container.innerHTML += `
             <div class="cart-item">
@@ -262,21 +260,15 @@ function renderCart() {
                 Safe Area Motor<br>
                 Price: € ${item.base.toFixed(2)} each<br>
                 Copper surcharge: ${item.copper}%<br>
-                Discount: ${item.discount}%<br>
-                <strong>Total Price: € ${finalPricePerItem.toFixed(2)} each</strong><br>
-                Delivery time: ${deliveryText}<br>
+                Discount: ${globalDiscount}%<br>
+                <strong>Total Price: € ${finalPrice.toFixed(2)} each</strong><br>
+                Delivery time: ${deliv}<br>
                 Delivery method: EXW EMA<br>
-                Payment method: 30 day’s after delivery.<br>
                 Efficiency class: ${item.specs.eff}<br>
-                Power: ${item.specs.pow} kW<br>
-                Poles: ${item.specs.pol}<br>
-                Voltage: ${item.specs.vol}<br>
-                Frequency: ${item.specs.frq}<br>
-                Phase: 3 Phase<br>
-                Insulation: ${item.specs.ins}<br>
-                Protection Class: ${item.specs.prt}<br>
-                Mounting: ${item.specs.mnt}<br>
-                Material: ${item.specs.mat.toLowerCase()}
+                Power: ${item.specs.pow} kW | Poles: ${item.specs.pol}<br>
+                Voltage: ${item.specs.vol} | Frequency: ${item.specs.frq}<br>
+                Insulation: ${item.specs.ins} | Protection: ${item.specs.prt}<br>
+                Mounting: ${item.specs.mnt} | Material: ${item.specs.mat.toLowerCase()}
                 ${item.specs.others.map(o => `<span class="extra-opt">+ ${o}</span>`).join('')}
             </div>
         `;
