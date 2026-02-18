@@ -21,16 +21,14 @@
 
         .config-row { display: flex; gap: 20px; margin-bottom: 20px; background: #fff5f5; padding: 15px; border-radius: 8px; border: 1px solid #fee2e2; align-items: center; }
         .config-group { flex: 1; }
-        
-        .stock-indicator { display: flex; align-items: center; font-weight: 700; font-size: 0.9rem; padding: 8px 15px; border-radius: 20px; background: #fff; border: 1px solid #e2e8f0; min-width: 150px; justify-content: center; }
-        .dot { height: 12px; width: 12px; border-radius: 50%; display: inline-block; margin-right: 10px; }
-        .dot-green { background-color: var(--stock-ok); box-shadow: 0 0 8px var(--stock-ok); }
-        .dot-red { background-color: var(--stock-low); box-shadow: 0 0 8px var(--stock-low); }
-        .dot-gray { background-color: #94a3b8; }
 
         .select-group { margin-bottom: 12px; }
         label { display: block; font-size: 0.8rem; font-weight: 700; margin-bottom: 4px; color: var(--secondary); text-transform: uppercase; }
-        select, input[type="number"] { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 1rem; outline: none; }
+        select, input[type="number"] { width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 1rem; outline: none; background: white; }
+        select:focus { border-color: var(--primary); }
+
+        /* Highlight the Type dropdown because it contains stock info */
+        #col4 { border: 2px solid #e2e8f0; font-weight: 600; }
 
         .modifier-section { margin-top: 20px; padding: 15px; background: #fef2f2; border-radius: 8px; border: 1px solid #fee2e2; }
         .modifier-item { display: flex; align-items: center; margin-bottom: 8px; cursor: pointer; font-size: 0.9rem; }
@@ -39,11 +37,12 @@
         .btn-add { background-color: var(--primary); color: white; border: none; padding: 15px; border-radius: 6px; font-weight: bold; cursor: pointer; width: 100%; margin-top: 15px; font-size: 1.1rem; transition: 0.2s; }
         .btn-add:hover { background-color: var(--primary-hover); }
 
-        .cart-item { border-bottom: 1px solid #eee; padding: 25px 0; line-height: 1.6; color: #334155; }
+        .cart-item { border-bottom: 1px solid #eee; padding: 25px 0; line-height: 1.6; color: #334155; position: relative; }
         .item-title { font-weight: 800; font-size: 1.2rem; color: #000; display: block; margin-bottom: 8px; }
         .extra-opt { color: #dc2626; font-weight: 600; font-size: 0.85rem; display: block; margin-top: 2px; }
         
         .grand-total { margin-top: 20px; text-align: right; font-size: 1.8rem; font-weight: 800; color: var(--primary); }
+        .remove-btn { color: var(--primary); cursor: pointer; text-decoration: underline; font-size: 0.8rem; border: none; background: none; padding: 0; margin-top: 10px; }
     </style>
 </head>
 <body>
@@ -56,9 +55,8 @@
             <label>Discount (%)</label>
             <input type="number" id="global-discount" value="0" onchange="renderCart()">
         </div>
-        <div id="stock-status-box" class="stock-indicator">
-            <span id="stock-dot" class="dot dot-gray"></span>
-            <span id="stock-text">Select motor</span>
+        <div class="config-group" style="font-size: 0.85rem; color: var(--secondary); text-align: right;">
+            🟢 = In Stock | 🔴 = Out of Stock
         </div>
     </div>
 
@@ -69,7 +67,7 @@
         <div class="select-group"><label>Poles</label><select id="col1" onchange="handleSelectChange(1)"></select></div>
         <div class="select-group"><label>Efficiency</label><select id="col2" onchange="handleSelectChange(2)"></select></div>
         <div class="select-group"><label>Power kW</label><select id="col3" onchange="handleSelectChange(3)"></select></div>
-        <div class="select-group"><label>Type</label><select id="col4" onchange="handleSelectChange(4)"></select></div>
+        <div class="select-group"><label>Type (Stock Status)</label><select id="col4" onchange="handleSelectChange(4)"></select></div>
 
         <div id="modifier-area" class="modifier-section">
             <label>Extra Options & Modifications:</label>
@@ -87,7 +85,6 @@
 </div>
 
 <script>
-// Change this GID to your stock tab GID
 const baseSheetURL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQdeTFdaPb_8qPBhm-NlXIXmoH9KxwEfqOucxBG40OShY72eJW6uaR-84C7pmO7WcP9WgVzmWH9vGd_/pub?single=true&output=csv';
 const priceGID = '0'; 
 const stockGID = 'HIER_JE_GID'; 
@@ -115,33 +112,25 @@ async function initialiseren() {
     } catch (e) { document.getElementById('loader').textContent = "Error loading data."; }
 }
 
-// Robust number cleaner for currency formats (handles 1.250,00 and 1,250.00)
 function cleanNumber(val) {
     if (!val) return 0;
-    let s = val.toString().replace(/[^\d,.-]/g, ''); // Keep digits, commas, dots, minus
+    let s = val.toString().replace(/[^\d,.-]/g, '');
     if (s.includes(',') && s.includes('.')) {
         if (s.lastIndexOf('.') > s.lastIndexOf(',')) s = s.replace(/,/g, '');
         else s = s.replace(/\./g, '').replace(',', '.');
-    } else {
-        s = s.replace(',', '.');
-    }
+    } else { s = s.replace(',', '.'); }
     return parseFloat(s) || 0;
 }
 
 function parsePrijsRegel(r) {
     const cols = r.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
     if (cols.length < 6) return null;
-    
     const mods = {};
     const modCel = cols[6]?.replace(/"/g, '').trim() || "";
     if (modCel) {
         modCel.split(/,(?=[^:]+:)/).forEach(m => {
             const idx = m.lastIndexOf(':');
-            if (idx !== -1) {
-                const modName = m.substring(0, idx).trim();
-                const modVal = cleanNumber(m.substring(idx+1));
-                mods[modName] = modVal;
-            }
+            if (idx !== -1) mods[m.substring(0, idx).trim()] = cleanNumber(m.substring(idx+1));
         });
     }
     return {
@@ -174,26 +163,34 @@ function updateDropdowns(start) {
             for (let j = 0; j < i; j++) { if (picks[j] && item.kenmerken[j] !== picks[j]) return false; }
             return true;
         });
+        
         const opts = [...new Set(filtered.map(item => item.kenmerken[i]))].sort((a,b) => a.localeCompare(b, undefined, {numeric:true}));
-        select.innerHTML = '<option value="">Select...</option>' + opts.map(o => `<option value="${o}">${o}</option>`).join('');
+        
+        let html = '<option value="">Select...</option>';
+        opts.forEach(o => {
+            let label = o;
+            // Alleen voor de laatste dropdown (Type) voegen we de voorraad-emoji toe
+            if (i === 4) {
+                const stock = voorraadData[o] || 0;
+                label = (stock > 0 ? `🟢 ${o} (${stock} pcs)` : `🔴 ${o} (Out of stock)`);
+            }
+            html += `<option value="${o}">${label}</option>`;
+        });
+        select.innerHTML = html;
     }
 }
 
 function updateMainUI() {
     const picks = [0,1,2,3,4].map(i => document.getElementById(`col${i}`).value);
     const listDiv = document.getElementById('modifier-list');
-    const dot = document.getElementById('stock-dot');
-    const text = document.getElementById('stock-text');
     
     if (picks.includes("")) { 
         listDiv.innerHTML = "Select motor details..."; 
-        dot.className = "dot dot-gray"; text.textContent = "Select motor";
         lastType = "";
         return; 
     }
 
     const currentType = picks[4];
-
     if (currentType !== lastType) {
         lastType = currentType;
         const match = tabelData.find(item => item.kenmerken.every((v, i) => v === picks[i]));
@@ -205,15 +202,6 @@ function updateMainUI() {
                 </div>
             `).join('');
         }
-        
-        const aantal = voorraadData[currentType] || 0;
-        if (aantal > 0) {
-            dot.className = "dot dot-green"; text.textContent = `In stock (${aantal})`;
-            text.dataset.status = "in-stock";
-        } else {
-            dot.className = "dot dot-red"; text.textContent = "Out of stock";
-            text.dataset.status = "no-stock";
-        }
     }
 }
 
@@ -223,7 +211,7 @@ function addToCart() {
 
     const match = tabelData.find(item => item.kenmerken.every((v, i) => v === picks[i]));
     const discount = parseFloat(document.getElementById('global-discount').value) || 0;
-    const stockStatus = document.getElementById('stock-text').dataset.status;
+    const stockCount = voorraadData[picks[4]] || 0;
 
     let mounting = "B3", protection = "IP55", insulation = "Class F", voltage = "400V / 690V", freq = "50 Hz";
     let copper = 0, extraPrice = 0, otherMods = [];
@@ -248,7 +236,7 @@ function addToCart() {
         copper: copper,
         discount: discount,
         total: match.prijs + extraPrice,
-        stock: stockStatus,
+        inStock: stockCount > 0,
         specs: { 
             eff: match.kenmerken[2], pow: match.kenmerken[3], pol: match.kenmerken[1], 
             mat: match.kenmerken[0], mnt: mounting, prt: protection, ins: insulation,
@@ -270,7 +258,7 @@ function renderCart() {
     cart.forEach((item, index) => {
         const finalPrice = item.total * (1 - (globalDiscount / 100));
         grandTotal += finalPrice;
-        const deliv = item.stock === "in-stock" ? "on stock, while stock last" : "4-6 weeks (to be confirmed)";
+        const deliv = item.inStock ? "on stock, while stock last" : "4-6 weeks (to be confirmed)";
 
         container.innerHTML += `
             <div class="cart-item">
@@ -282,15 +270,12 @@ function renderCart() {
                 Discount: ${globalDiscount}%<br>
                 <strong>Total Price: € ${finalPrice.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})} each</strong><br>
                 Delivery time: ${deliv}<br>
-                Delivery method: EXW EMA<br>
-                Payment method: 30 days after delivery.<br>
-                Efficiency class: ${item.specs.eff}<br>
-                Power: ${item.specs.pow} kW | Poles: ${item.specs.pol}<br>
+                Efficiency class: ${item.specs.eff} | Power: ${item.specs.pow} kW | Poles: ${item.specs.pol}<br>
                 Voltage: ${item.specs.vol} | Frequency: ${item.specs.frq}<br>
                 Insulation: ${item.specs.ins} | Protection Class: ${item.specs.prt}<br>
                 Mounting: ${item.specs.mnt} | Material: ${item.specs.mat.toLowerCase()}
                 ${item.specs.others.map(o => `<span class="extra-opt">+ ${o}</span>`).join('')}
-                <br><button onclick="removeFromCart(${index})" style="background:none; border:none; color:var(--primary); cursor:pointer; text-decoration:underline; padding:0; font-size:0.8rem;">Remove</button>
+                <button class="remove-btn" onclick="removeFromCart(${index})">Remove item</button>
             </div>
         `;
     });
