@@ -6,19 +6,22 @@
     <title>EMA Price Calculator - Technical Specifications</title>
     <style>
         :root {
-            --primary: #2563eb;
+            --primary: #dc2626; /* Rood accent */
+            --primary-hover: #991b1b;
             --secondary: #64748b;
-            --success: #22c55e;
+            --success: #16a34a;
             --bg: #f8fafc;
+            --border: #cbd5e1;
         }
 
         body { 
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
             background-color: var(--bg); 
             color: #1e293b;
-            display: flex;
-            justify-content: center;
             padding: 40px 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
         }
 
         .container { 
@@ -26,11 +29,12 @@
             padding: 30px; 
             border-radius: 12px; 
             box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); 
-            max-width: 600px; 
+            max-width: 700px; 
             width: 100%;
+            margin-bottom: 20px;
         }
 
-        h2 { margin-top: 0; color: var(--primary); border-bottom: 2px solid #f1f5f9; padding-bottom: 10px; }
+        h2, h3 { margin-top: 0; color: var(--primary); border-bottom: 2px solid #f1f5f9; padding-bottom: 10px; }
 
         .select-group { margin-bottom: 15px; }
         label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 5px; color: var(--secondary); }
@@ -38,7 +42,7 @@
         select { 
             width: 100%; 
             padding: 12px; 
-            border: 1px solid #cbd5e1; 
+            border: 1px solid var(--border); 
             border-radius: 6px; 
             background-color: white;
             font-size: 1rem;
@@ -49,32 +53,74 @@
         select:focus { border-color: var(--primary); }
 
         .modifier-section { 
-            margin-top: 25px; 
-            padding: 20px; 
-            background: #f1f5f9; 
+            margin-top: 20px; 
+            padding: 15px; 
+            background: #fef2f2; 
             border-radius: 8px; 
+            border: 1px solid #fee2e2;
         }
 
         .modifier-item { 
             display: flex; 
             align-items: center; 
-            margin-bottom: 10px; 
+            margin-bottom: 8px; 
             cursor: pointer;
             font-size: 0.9rem;
         }
 
-        .modifier-item input { margin-right: 12px; transform: scale(1.2); }
+        .modifier-item input { margin-right: 12px; accent-color: var(--primary); }
 
-        .price-container { 
-            margin-top: 30px; 
-            padding-top: 20px; 
-            border-top: 2px solid var(--primary); 
+        .action-area {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 25px;
+            padding-top: 20px;
+            border-top: 2px solid #f1f5f9;
         }
 
-        .price-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-        .price-label { font-weight: bold; }
-        .price-value { font-size: 1.2rem; font-weight: 800; }
-        .total-price { color: var(--success); font-size: 1.8rem; }
+        .btn-add {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 1.2rem;
+            transition: background 0.2s;
+        }
+
+        .btn-add:hover { background-color: var(--primary-hover); }
+
+        /* Cart Styling */
+        .cart-container {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+            max-width: 700px;
+            width: 100%;
+        }
+
+        .cart-item {
+            border-bottom: 1px solid #e2e8f0;
+            padding: 20px 0;
+            line-height: 1.6;
+            font-size: 0.95rem;
+        }
+
+        .cart-item:last-child { border-bottom: none; }
+
+        .item-title { font-weight: 800; font-size: 1.1rem; color: #000; }
+        
+        .grand-total {
+            margin-top: 20px;
+            text-align: right;
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: var(--primary);
+        }
 
         .loading { color: var(--secondary); font-style: italic; text-align: center; }
     </style>
@@ -82,8 +128,8 @@
 <body>
 
 <div class="container">
-    <h2>EMA Price Calculator - Technical Specifications</h2>
-    <div id="loader" class="loading">Fetching data from Google Sheets...</div>
+    <h2>EMA Price Calculator</h2>
+    <div id="loader" class="loading">Loading data...</div>
     
     <div id="main-ui" style="display:none;">
         <div class="select-group"><label>Material</label><select id="col0" onchange="handleSelectChange(0)"></select></div>
@@ -93,27 +139,31 @@
         <div class="select-group"><label>Type</label><select id="col4" onchange="handleSelectChange(4)"></select></div>
 
         <div id="modifier-area" class="modifier-section">
-            <h4>Extra Options:</h4>
-            <div id="modifier-list">Please select at least Type...</div>
+            <label>Extra Options (Modifiers):</label>
+            <div id="modifier-list">Complete selection first...</div>
         </div>
 
-        <div class="price-container">
-            <div class="price-row">
-                <span class="price-label">Base Price:</span>
-                <span id="base-price" class="price-value">€ 0.00</span>
+        <div class="action-area">
+            <div>
+                <div style="font-size: 0.8rem; color: var(--secondary);">Current Item Price:</div>
+                <div id="current-total" style="font-size: 1.4rem; font-weight: 800;">€ 0.00</div>
             </div>
-            <div class="price-row">
-                <span class="price-label">Total:</span>
-                <span id="total-price" class="price-value total-price">€ 0.00</span>
-            </div>
+            <button class="btn-add" onclick="addToCart()">+ Add to List</button>
         </div>
     </div>
+</div>
+
+<div class="cart-container" id="cart-section" style="display: none;">
+    <h3>Order Overview</h3>
+    <div id="cart-items"></div>
+    <div class="grand-total" id="grand-total-display">Total Price: € 0.00</div>
 </div>
 
 <script>
 const sheetURL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQdeTFdaPb_8qPBhm-NlXIXmoH9KxwEfqOucxBG40OShY72eJW6uaR-84C7pmO7WcP9WgVzmWH9vGd_/pub?gid=0&single=true&output=csv';
 
 let tabelData = [];
+let cart = [];
 
 async function laadData() {
     try {
@@ -125,11 +175,9 @@ async function laadData() {
             const kolommen = regel.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
             if (kolommen.length < 6) return null;
 
-            // Clean Price
             let prijsSchoon = kolommen[5].replace(/[^\d,.]/g, '').replace(',', '.');
             let prijsNummer = parseFloat(prijsSchoon);
 
-            // Parse Modifiers (Smart split on comma followed by text:number)
             const modObject = {};
             const modCel = kolommen[6]?.replace(/"/g, '').trim() || "";
             
@@ -140,9 +188,7 @@ async function laadData() {
                     if (laatsteDubbelePunt !== -1) {
                         const naam = m.substring(0, laatsteDubbelePunt).trim();
                         const perc = parseFloat(m.substring(laatsteDubbelePunt + 1).replace(',', '.'));
-                        if (naam && !isNaN(perc)) {
-                            modObject[naam] = perc;
-                        }
+                        if (naam && !isNaN(perc)) { modObject[naam] = perc; }
                     }
                 });
             }
@@ -158,7 +204,7 @@ async function laadData() {
         document.getElementById('loader').style.display = 'none';
         document.getElementById('main-ui').style.display = 'block';
     } catch (error) {
-        document.getElementById('loader').textContent = "Error loading data. Check source link.";
+        document.getElementById('loader').textContent = "Error loading data.";
     }
 }
 
@@ -170,10 +216,6 @@ function handleSelectChange(index) {
     }
     updateDropdowns(index + 1);
     updateUI();
-}
-
-function slimSorteren(a, b) {
-    return a.toString().localeCompare(b.toString(), undefined, {numeric: true, sensitivity: 'base'});
 }
 
 function updateDropdowns(startIndex) {
@@ -193,13 +235,12 @@ function updateDropdowns(startIndex) {
 
         const opties = [...new Set(beschikbareData.map(item => item.kenmerken[i]))]
                         .filter(opt => opt && opt.trim() !== "")
-                        .sort(slimSorteren);
+                        .sort((a, b) => a.toString().localeCompare(b.toString(), undefined, {numeric: true}));
         
         select.innerHTML = '<option value="">Select option...</option>';
         opties.forEach(opt => {
             const el = document.createElement('option');
-            el.value = opt;
-            el.textContent = opt;
+            el.value = opt; el.textContent = opt;
             select.appendChild(el);
         });
     }
@@ -211,46 +252,117 @@ function updateUI() {
     const modList = document.getElementById('modifier-list');
     
     if (!allesGeselecteerd) {
-        modList.innerHTML = 'Please complete all selections...';
-        document.getElementById('base-price').textContent = "€ 0.00";
-        document.getElementById('total-price').textContent = "€ 0.00";
+        modList.innerHTML = 'Complete all selections...';
+        document.getElementById('current-total').textContent = "€ 0.00";
         return;
     }
 
     const match = tabelData.find(item => item.kenmerken.every((v, i) => v === keuzes[i]));
 
     if (match) {
-        document.getElementById('base-price').textContent = `€ ${match.prijs.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-        
         const modKeys = Object.keys(match.modifiers);
+        modList.innerHTML = '';
         if (modKeys.length > 0) {
-            modList.innerHTML = '';
             modKeys.forEach(naam => {
                 const perc = match.modifiers[naam];
                 const div = document.createElement('div');
                 div.className = 'modifier-item';
-                div.innerHTML = `
-                    <input type="checkbox" class="mod-check" value="${perc}" onchange="recalc(${match.prijs})"> 
-                    <span>${naam} (+${perc}%)</span>
-                `;
+                div.innerHTML = `<input type="checkbox" class="mod-check" data-name="${naam}" value="${perc}" onchange="recalc()"> <span>${naam} (+${perc}%)</span>`;
                 modList.appendChild(div);
             });
         } else {
-            modList.innerHTML = 'No extra options available.';
+            modList.innerHTML = 'No extra options.';
         }
-        recalc(match.prijs);
-    } else {
-        modList.innerHTML = 'No exact match found for this combination.';
+        recalc();
     }
 }
 
-function recalc(base) {
-    let extraPerc = 0;
+function recalc() {
+    const keuzes = [0,1,2,3,4].map(i => document.getElementById(`col${i}`).value);
+    const match = tabelData.find(item => item.kenmerken.every((v, i) => v === keuzes[i]));
+    if (!match) return 0;
+
+    let total = match.prijs;
     document.querySelectorAll('.mod-check:checked').forEach(cb => {
-        extraPerc += parseFloat(cb.value) || 0;
+        total += (match.prijs * (parseFloat(cb.value) / 100));
     });
-    const totaal = base * (1 + (extraPerc / 100));
-    document.getElementById('total-price').textContent = `€ ${totaal.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+
+    document.getElementById('current-total').textContent = `€ ${total.toFixed(2)}`;
+    return total;
+}
+
+function addToCart() {
+    const keuzes = [0,1,2,3,4].map(i => document.getElementById(`col${i}`).value);
+    if (keuzes.some(k => k === "")) return alert("Please select all options first");
+
+    const match = tabelData.find(item => item.kenmerken.every((v, i) => v === keuzes[i]));
+    const selectedMods = [];
+    let copperSurcharge = 0;
+
+    document.querySelectorAll('.mod-check:checked').forEach(cb => {
+        const name = cb.getAttribute('data-name');
+        const val = parseFloat(cb.value);
+        selectedMods.push({name, val});
+        if (name.toLowerCase().includes("copper")) copperSurcharge = val;
+    });
+
+    const itemPrice = recalc();
+
+    const newItem = {
+        type: match.kenmerken[4],
+        material: match.kenmerken[0],
+        poles: match.kenmerken[1],
+        efficiency: match.kenmerken[2],
+        power: match.kenmerken[3],
+        basePrice: match.prijs,
+        copperSurcharge: copperSurcharge,
+        totalPrice: itemPrice,
+        mods: selectedMods
+    };
+
+    cart.push(newItem);
+    renderCart();
+}
+
+function renderCart() {
+    const cartDiv = document.getElementById('cart-items');
+    const cartSection = document.getElementById('cart-section');
+    cartSection.style.display = 'block';
+    cartDiv.innerHTML = '';
+    
+    let grandTotal = 0;
+
+    cart.forEach(item => {
+        grandTotal += item.totalPrice;
+        const div = document.createElement('div');
+        div.className = 'cart-item';
+        div.innerHTML = `
+            <div class="item-title">1x ${item.type}</div>
+            Brand: Electric Motors Amsterdam (EMA)<br>
+            Safe Area Motor<br>
+            Price: € ${item.basePrice.toFixed(2)} each<br>
+            Copper surcharge: ${item.copperSurcharge}%<br>
+            Discount: 15%<br>
+            <strong>Total Price: € ${(item.totalPrice * 0.85).toFixed(2)} each</strong><br>
+            Delivery time: on stock, while stock last<br>
+            Delivery method: EXW EMA<br>
+            Payment method: 30 day’s after delivery.<br>
+            Efficiency class: ${item.efficiency}<br>
+            Power: ${item.power} kW<br>
+            Poles: ${item.poles}<br>
+            Voltage: 400V / 690V<br>
+            Frequency: 50 Hz<br>
+            Phase: 3 Phase<br>
+            Insulation: Class F<br>
+            Protection Class: IP55<br>
+            Mounting: B3<br>
+            Material: ${item.material.toLowerCase()}
+        `;
+        cartDiv.appendChild(div);
+    });
+
+    // Discount applied to grand total for demo (matching your "Total Price" logic per item)
+    document.getElementById('grand-total-display').textContent = `Total Price: € ${(grandTotal * 0.85).toFixed(2)}`;
 }
 
 laadData();
