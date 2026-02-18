@@ -124,7 +124,7 @@
 <script>
 const baseSheetURL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQdeTFdaPb_8qPBhm-NlXIXmoH9KxwEfqOucxBG40OShY72eJW6uaR-84C7pmO7WcP9WgVzmWH9vGd_/pub?single=true&output=csv';
 const priceGID = '0'; 
-const stockGID = '713664103'; // VERVANG DEZE DOOR JE EIGEN GID
+const stockGID = '713664103'; 
 
 let tabelData = [];
 let voorraadData = {}; 
@@ -185,28 +185,32 @@ function parseVoorraad(csv) {
 }
 
 function handleSelectChange(idx) {
-    // 1. Wis alle keuzes die ONDER het gewijzigde vak liggen
+    // 1. Reset alle dropdowns onder de huidige keuze
     for (let i = idx + 1; i < 5; i++) {
-        document.getElementById(`col${i}`).value = "";
+        const el = document.getElementById(`col${i}`);
+        el.innerHTML = ""; 
+        el.value = "";
     }
 
+    // 2. Verkrijg huidige keuzes
     const currentPicks = [0,1,2,3,4].map(i => document.getElementById(`col${i}`).value);
     
-    // 2. Zoek naar mogelijke matches op basis van huidige selecties
+    // 3. Filter data op basis van wat wél is ingevuld
     const possibleMatches = tabelData.filter(item => {
         return currentPicks.every((pick, i) => pick === "" || item.kenmerken[i] === pick);
     });
 
-    // 3. AUTO-FILL: Als er nog maar 1 motor overblijft, vul alles in
+    // 4. AUTO-FILL: Als er nog maar 1 motor overblijft, vul alles in (ook bovenliggend indien leeg)
     if (possibleMatches.length === 1) {
         const match = possibleMatches[0];
         for (let i = 0; i < 5; i++) {
             const el = document.getElementById(`col${i}`);
+            // Forceer de optie in de lijst en selecteer hem
             updateSingleDropdown(i, match.kenmerken[i]);
             el.value = match.kenmerken[i];
         }
     } else {
-        // 4. Update de dropdowns onder de huidige keuze
+        // 5. Update alleen de eerstvolgende dropdowns
         updateDropdowns(idx + 1);
     }
     
@@ -221,7 +225,7 @@ function updateDropdowns(startIdx) {
         
         const filtered = tabelData.filter(item => {
             for (let j = 0; j < 5; j++) {
-                if (i !== j && picks[j] !== "" && item.kenmerken[j] !== picks[j]) return false;
+                if (picks[j] !== "" && i !== j && item.kenmerken[j] !== picks[j]) return false;
             }
             return true;
         });
@@ -243,25 +247,25 @@ function updateDropdowns(startIdx) {
 
 function updateSingleDropdown(idx, value) {
     const select = document.getElementById(`col${idx}`);
-    if (!select.querySelector(`option[value="${value}"]`)) {
-        let label = value;
-        if (idx === 4) {
-            const stock = voorraadData[value] || 0;
-            label = (stock > 0 ? `🟢 ${value} (${stock} pcs)` : `🔴 ${value} (Out of stock)`);
-        }
-        // Behoud "Select..." en voeg de unieke optie toe
-        select.innerHTML = `<option value="">Select...</option><option value="${value}">${label}</option>`;
+    let label = value;
+    if (idx === 4) {
+        const stock = voorraadData[value] || 0;
+        label = (stock > 0 ? `🟢 ${value} (${stock} pcs)` : `🔴 ${value} (Out of stock)`);
     }
+    // We herbouwen de dropdown met alleen deze optie + de placeholder
+    select.innerHTML = `<option value="">Select...</option><option value="${value}">${label}</option>`;
 }
 
 function updateMainUI() {
     const picks = [0,1,2,3,4].map(i => document.getElementById(`col${i}`).value);
     const listDiv = document.getElementById('modifier-list');
+    
     if (picks.includes("")) { 
-        listDiv.innerHTML = "Select motor details..."; 
+        listDiv.innerHTML = "Please select all motor details..."; 
         lastType = "";
         return; 
     }
+
     const currentType = picks[4];
     if (currentType !== lastType) {
         lastType = currentType;
@@ -279,8 +283,19 @@ function updateMainUI() {
 
 function addToCart() {
     const picks = [0,1,2,3,4].map(i => document.getElementById(`col${i}`).value);
-    if (picks.includes("")) return;
+    
+    // Check of alles is geselecteerd
+    if (picks.some(p => p === "")) {
+        alert("Please complete the motor selection first.");
+        return;
+    }
+
     const match = tabelData.find(item => item.kenmerken.every((v, i) => v === picks[i]));
+    if (!match) {
+        alert("Configuration not found in database.");
+        return;
+    }
+
     const discount = parseFloat(document.getElementById('global-discount').value) || 0;
     const stockCount = voorraadData[picks[4]] || 0;
 
