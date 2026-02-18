@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EMA Price & Stock Configurator</title>
+    <title>EMA Offer Configurator</title>
     <style>
         :root {
             --primary: #dc2626;
@@ -80,7 +80,7 @@
     
     <div class="config-row">
         <div class="config-group">
-            <label>Global Discount (%)</label>
+            <label>Client Discount (%)</label>
             <input type="number" id="global-discount" value="0" onchange="renderCart()">
         </div>
     </div>
@@ -111,7 +111,7 @@
 </div>
 
 <div class="cart-container" id="cart-section" style="display: none;">
-    <h3>Order Overview</h3>
+    <h3>Offer Overview</h3>
     <div id="cart-items"></div>
     <div class="grand-total" id="grand-total-display">Total: € 0.00</div>
     
@@ -122,7 +122,6 @@
 </div>
 
 <script>
-// Logic remains consistent with previous versions
 const baseSheetURL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQdeTFdaPb_8qPBhm-NlXIXmoH9KxwEfqOucxBG40OShY72eJW6uaR-84C7pmO7WcP9WgVzmWH9vGd_/pub?single=true&output=csv';
 const priceGID = '0'; 
 const stockGID = 'HIER_JE_GID'; 
@@ -186,20 +185,72 @@ function parseVoorraad(csv) {
 }
 
 function handleSelectChange(idx) {
-    for (let i = idx + 1; i < 5; i++) document.getElementById(`col${i}`).innerHTML = '';
-    updateDropdowns(idx + 1);
+    const currentVal = document.getElementById(`col${idx}`).value;
+    
+    // Als we een waarde hebben gekozen, check of er nog maar 1 unieke optie overblijft voor de andere velden
+    if (currentVal !== "") {
+        const currentPicks = [0,1,2,3,4].map(i => document.getElementById(`col${i}`).value);
+        
+        // Filter data op basis van wat nu geselecteerd is
+        const possibleMatches = tabelData.filter(item => {
+            return currentPicks.every((pick, i) => pick === "" || item.kenmerken[i] === pick);
+        });
+
+        // Als er maar 1 motor overblijft, vul alle velden in
+        if (possibleMatches.length === 1) {
+            const match = possibleMatches[0];
+            for (let i = 0; i < 5; i++) {
+                const el = document.getElementById(`col${i}`);
+                if (el.value === "") {
+                    // We moeten de dropdown eerst vullen met de juiste optie als die er nog niet in stond
+                    updateSingleDropdown(i, match.kenmerken[i]);
+                    el.value = match.kenmerken[i];
+                }
+            }
+        }
+    }
+
+    // Update de dropdowns die 'stroomafwaarts' liggen
+    for (let i = idx + 1; i < 5; i++) {
+        if (document.getElementById(`col${i}`).value === "") {
+            updateDropdowns(i);
+        }
+    }
+    
     updateMainUI();
 }
 
-function updateDropdowns(start) {
+// Hulpfunctie om een dropdown te forceren naar een specifieke waarde als hij leeg is
+function updateSingleDropdown(idx, value) {
+    const select = document.getElementById(`col${idx}`);
+    if (select.innerHTML === "" || select.querySelector(`option[value="${value}"]`) === null) {
+        let label = value;
+        if (idx === 4) {
+            const stock = voorraadData[value] || 0;
+            label = (stock > 0 ? `🟢 ${value} (${stock} pcs)` : `🔴 ${value} (Out of stock)`);
+        }
+        select.innerHTML = `<option value="">Select...</option><option value="${value}">${label}</option>`;
+    }
+}
+
+function updateDropdowns(startIdx) {
     const picks = [0,1,2,3,4].map(i => document.getElementById(`col${i}`).value);
-    for (let i = start; i < 5; i++) {
+    
+    for (let i = startIdx; i < 5; i++) {
         const select = document.getElementById(`col${i}`);
+        // Als het veld al is ingevuld door de auto-fill, sla het over tenzij we expliciet resetten
+        if (select.value !== "" && i < startIdx) continue;
+
         const filtered = tabelData.filter(item => {
-            for (let j = 0; j < i; j++) { if (picks[j] && item.kenmerken[j] !== picks[j]) return false; }
+            for (let j = 0; j < 5; j++) { 
+                if (i !== j && picks[j] !== "" && item.kenmerken[j] !== picks[j]) return false; 
+            }
             return true;
         });
+        
         const opts = [...new Set(filtered.map(item => item.kenmerken[i]))].sort((a,b) => a.localeCompare(b, undefined, {numeric:true}));
+        
+        const currentVal = select.value;
         let html = '<option value="">Select...</option>';
         opts.forEach(o => {
             let label = o;
@@ -207,7 +258,7 @@ function updateDropdowns(start) {
                 const stock = voorraadData[o] || 0;
                 label = (stock > 0 ? `🟢 ${o} (${stock} pcs)` : `🔴 ${o} (Out of stock)`);
             }
-            html += `<option value="${o}">${label}</option>`;
+            html += `<option value="${o}" ${o === currentVal ? 'selected' : ''}>${label}</option>`;
         });
         select.innerHTML = html;
     }
@@ -325,7 +376,7 @@ function clearCart() {
 }
 
 function copyCartToClipboard() {
-    let textToCopy = "ORDER OVERVIEW - EMA Price Configurator\n";
+    let textToCopy = "OFFER OVERVIEW - Electric Motors Amsterdam B.V.\n";
     textToCopy += "========================================\n\n";
     
     const globalDiscount = parseFloat(document.getElementById('global-discount').value) || 0;
