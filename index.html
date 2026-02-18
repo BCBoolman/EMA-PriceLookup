@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prijs Calculator - Google Sheets Sync</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --secondary: #64748b;
+            --success: #22c55e;
+            --bg: #f8fafc;
+        }
+
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background-color: var(--bg); 
+            color: #1e293b;
+            display: flex;
+            justify-content: center;
+            padding: 40px 20px;
+        }
+
+        .container { 
+            background: white; 
+            padding: 30px; 
+            border-radius: 12px; 
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); 
+            max-width: 600px; 
+            width: 100%;
+        }
+
+        h2 { margin-top: 0; color: var(--primary); border-bottom: 2px solid #f1f5f9; pb: 10px; }
+
+        .select-group { margin-bottom: 15px; }
+        label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 5px; color: var(--secondary); }
+
+        select { 
+            width: 100%; 
+            padding: 12px; 
+            border: 1px solid #cbd5e1; 
+            border-radius: 6px; 
+            background-color: white;
+            font-size: 1rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        select:focus { border-color: var(--primary); }
+
+        .modifier-section { 
+            margin-top: 25px; 
+            padding: 20px; 
+            background: #f1f5f9; 
+            border-radius: 8px; 
+        }
+
+        .modifier-item { 
+            display: flex; 
+            align-items: center; 
+            margin-bottom: 10px; 
+            cursor: pointer;
+        }
+
+        .modifier-item input { margin-right: 12px; transform: scale(1.2); }
+
+        .price-container { 
+            margin-top: 30px; 
+            padding-top: 20px; 
+            border-top: 2px solid var(--primary); 
+        }
+
+        .price-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .price-label { font-weight: bold; }
+        .price-value { font-size: 1.2rem; font-weight: 800; }
+        .total-price { color: var(--success); font-size: 1.8rem; }
+
+        .loading { color: var(--secondary); font-style: italic; text-align: center; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Calculator</h2>
+    <div id="loader" class="loading">Data ophalen uit Google Sheets...</div>
+    
+    <div id="main-ui" style="display:none;">
+        <div class="select-group"><label>Kolom 1</label><select id="col0" onchange="updateUI()"></select></div>
+        <div class="select-group"><label>Kolom 2</label><select id="col1" onchange="updateUI()"></select></div>
+        <div class="select-group"><label>Kolom 3</label><select id="col2" onchange="updateUI()"></select></div>
+        <div class="select-group"><label>Kolom 4</label><select id="col3" onchange="updateUI()"></select></div>
+        <div class="select-group"><label>Kolom 5</label><select id="col4" onchange="updateUI()"></select></div>
+
+        <div id="modifier-area" class="modifier-section" style="display:none;">
+            <h4>Extra Opties:</h4>
+            <div id="modifier-list"></div>
+        </div>
+
+        <div class="price-container">
+            <div class="price-row">
+                <span class="price-label">Basisprijs:</span>
+                <span id="base-price" class="price-value">€ 0,00</span>
+            </div>
+            <div class="price-row">
+                <span class="price-label">Totaal:</span>
+                <span id="total-price" class="price-value total-price">€ 0,00</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// VERVANG DEZE LINK DOOR JOUW GOOGLE SHEETS CSV LINK
+const sheetURL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQdeTFdaPb_8qPBhm-NlXIXmoH9KxwEfqOucxBG40OShY72eJW6uaR-84C7pmO7WcP9WgVzmWH9vGd_/pub?gid=0&single=true&output=csv';
+
+let tabelData = [];
+
+async function laadData() {
+    try {
+        const response = await fetch(sheetURL);
+        const tekst = await response.text();
+        
+        // Verwerk CSV (komma-gescheiden, negeer komma's tussen quotes)
+        const regels = tekst.split(/\r?\n/).slice(1); 
+        
+        tabelData = regels.map(regel => {
+            const kolommen = regel.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
+            if (kolommen.length < 6) return null;
+
+            const modObject = {};
+            const modCel = kolommen[6]?.replace(/"/g, '').trim() || "";
+            if (modCel) {
+                modCel.split('|').forEach(m => {
+                    const [naam, perc] = m.split(':');
+                    if (naam && perc) modObject[naam.trim()] = parseFloat(perc);
+                });
+            }
+
+            return {
+                kenmerken: kolommen.slice(0, 5).map(s => s.trim().replace(/"/g, '')),
+                prijs: parseFloat(kolommen[5].replace(',', '.')),
+                modifiers: modObject
+            };
+        }).filter(item => item !== null);
+
+        initDropdowns();
+        document.getElementById('loader').style.display = 'none';
+        document.getElementById('main-ui').style.display = 'block';
+    } catch (error) {
+        document.getElementById('loader').textContent = "Fout bij laden data. Controleer de link.";
+        console.error(error);
+    }
+}
+
+function initDropdowns() {
+    for(let i=0; i<5; i++) {
+        const select = document.getElementById(`col${i}`);
+        // Haal unieke opties op voor deze kolom
+        const opties = [...new Set(tabelData.map(item => item.kenmerken[i]))].sort();
+        
+        select.innerHTML = '<option value="">Maak een keuze...</option>';
+        opties.forEach(opt => {
+            if(opt) {
+                const el = document.createElement('option');
+                el.value = opt; el.textContent = opt;
+                select.appendChild(el);
+            }
+        });
+    }
+}
+
+function updateUI() {
+    const keuzes = [
+        document.getElementById('col0').value,
+        document.getElementById('col1').value,
+        document.getElementById('col2').value,
+        document.getElementById('col3').value,
+        document.getElementById('col4').value
+    ];
+
+    const match = tabelData.find(item => 
+        item.kenmerken.every((val, index) => val === keuzes[index])
+    );
+
+    const modArea = document.getElementById('modifier-area');
+    const modList = document.getElementById('modifier-list');
+    const baseDisp = document.getElementById('base-price');
+
+    if (match) {
+        baseDisp.textContent = `€ ${match.prijs.toLocaleString('nl-NL', {minimumFractionDigits: 2})}`;
+        modArea.style.display = 'block';
+        
+        modList.innerHTML = '';
+        for (let [naam, perc] of Object.entries(match.modifiers)) {
+            const div = document.createElement('div');
+            div.className = 'modifier-item';
+            div.innerHTML = `
+                <input type="checkbox" class="mod-check" value="${perc}" onchange="recalc(${match.prijs})"> 
+                <span>${naam} (+${perc}%)</span>
+            `;
+            modList.appendChild(div);
+        }
+        recalc(match.prijs);
+    } else {
+        modArea.style.display = 'none';
+        baseDisp.textContent = "€ 0,00";
+        document.getElementById('total-price').textContent = "€ 0,00";
+    }
+}
+
+function recalc(base) {
+    let extraPerc = 0;
+    document.querySelectorAll('.mod-check:checked').forEach(cb => {
+        extraPerc += parseFloat(cb.value);
+    });
+
+    const totaal = base * (1 + (extraPerc / 100));
+    document.getElementById('total-price').textContent = `€ ${totaal.toLocaleString('nl-NL', {minimumFractionDigits: 2})}`;
+}
+
+laadData();
+</script>
+
+</body>
+</html>
