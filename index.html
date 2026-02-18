@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Prijs Calculator - Debugged</title>
+    <title>Prijs Calculator - Gesorteerde Opties</title>
     <style>
         :root {
             --primary: #2563eb;
@@ -125,7 +125,6 @@ async function laadData() {
             const kolommen = regel.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
             if (kolommen.length < 6) return null;
 
-            // Verbeterde prijs-parsing: verwijder alles behalve cijfers, komma en punt
             let prijsSchoon = kolommen[5].replace(/[^\d,.]/g, '').replace(',', '.');
             let prijsNummer = parseFloat(prijsSchoon);
 
@@ -156,7 +155,6 @@ async function laadData() {
 }
 
 function handleSelectChange(index) {
-    // Reset alle dropdowns die ná de gewijzigde dropdown komen
     for (let i = index + 1; i < 5; i++) {
         const s = document.getElementById(`col${i}`);
         s.innerHTML = '';
@@ -164,6 +162,19 @@ function handleSelectChange(index) {
     }
     updateDropdowns(index + 1);
     updateUI();
+}
+
+// Slimme sorteerfunctie: A-Z en 1-100
+function slimSorteren(a, b) {
+    // Check of het getallen zijn
+    const numA = parseFloat(a);
+    const numB = parseFloat(b);
+    
+    if (!isNaN(numA) && !isNaN(numB)) {
+        return numA - numB; // Sorteer numeriek
+    }
+    // Sorteer alfabetisch (tekst)
+    return a.toString().localeCompare(b.toString(), undefined, {numeric: true, sensitivity: 'base'});
 }
 
 function updateDropdowns(startIndex) {
@@ -184,16 +195,17 @@ function updateDropdowns(startIndex) {
             return true;
         });
 
-        const opties = [...new Set(beschikbareData.map(item => item.kenmerken[i]))].sort();
+        // Pak unieke opties en pas de slimSorteren functie toe
+        const opties = [...new Set(beschikbareData.map(item => item.kenmerken[i]))]
+                        .filter(opt => opt && opt.trim() !== "")
+                        .sort(slimSorteren);
         
         select.innerHTML = '<option value="">Maak een keuze...</option>';
         opties.forEach(opt => {
-            if (opt) {
-                const el = document.createElement('option');
-                el.value = opt;
-                el.textContent = opt;
-                select.appendChild(el);
-            }
+            const el = document.createElement('option');
+            el.value = opt;
+            el.textContent = opt;
+            select.appendChild(el);
         });
     }
 }
@@ -207,7 +219,6 @@ function updateUI() {
         document.getElementById('col4').value
     ];
 
-    // Check of alle velden zijn ingevuld
     const allesGeselecteerd = keuzes.every(k => k !== "");
     const modList = document.getElementById('modifier-list');
     const baseDisp = document.getElementById('base-price');
@@ -241,11 +252,11 @@ function updateUI() {
                 modList.appendChild(div);
             });
         } else {
-            modList.innerHTML = 'Geen extra opties beschikbaar voor deze selectie.';
+            modList.innerHTML = 'Geen extra opties beschikbaar.';
         }
         recalc(match.prijs);
     } else {
-        modList.innerHTML = 'Geen exacte match gevonden in de database.';
+        modList.innerHTML = 'Geen exacte match gevonden.';
         baseDisp.textContent = "€ 0,00";
         totalDisp.textContent = "€ 0,00";
     }
