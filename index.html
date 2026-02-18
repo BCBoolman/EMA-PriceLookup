@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Prijs Calculator - Dynamische Opties</title>
+    <title>Prijs Calculator - Debugged</title>
     <style>
         :root {
             --primary: #2563eb;
@@ -47,13 +47,13 @@
         }
 
         select:focus { border-color: var(--primary); }
-        select:disabled { background-color: #f1f5f9; cursor: not-allowed; }
 
         .modifier-section { 
             margin-top: 25px; 
             padding: 20px; 
             background: #f1f5f9; 
             border-radius: 8px; 
+            min-height: 50px;
         }
 
         .modifier-item { 
@@ -92,9 +92,9 @@
         <div class="select-group"><label>Kolom 4</label><select id="col3" onchange="handleSelectChange(3)"></select></div>
         <div class="select-group"><label>Kolom 5</label><select id="col4" onchange="handleSelectChange(4)"></select></div>
 
-        <div id="modifier-area" class="modifier-section" style="display:none;">
+        <div id="modifier-area" class="modifier-section">
             <h4>Extra Opties:</h4>
-            <div id="modifier-list"></div>
+            <div id="modifier-list">Maak eerst alle keuzes...</div>
         </div>
 
         <div class="price-container">
@@ -125,84 +125,76 @@ async function laadData() {
             const kolommen = regel.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
             if (kolommen.length < 6) return null;
 
+            // Verbeterde prijs-parsing: verwijder alles behalve cijfers, komma en punt
+            let prijsSchoon = kolommen[5].replace(/[^\d,.]/g, '').replace(',', '.');
+            let prijsNummer = parseFloat(prijsSchoon);
+
             const modObject = {};
             const modCel = kolommen[6]?.replace(/"/g, '').trim() || "";
-            if (modCel) {
+            if (modCel && modCel !== "") {
                 modCel.split('|').forEach(m => {
                     const parts = m.split(':');
                     if (parts.length === 2) {
-                        modObject[parts[0].trim()] = parseFloat(parts[1]);
+                        modObject[parts[0].trim()] = parseFloat(parts[1].replace(',', '.'));
                     }
                 });
             }
 
             return {
                 kenmerken: kolommen.slice(0, 5).map(s => s.trim().replace(/"/g, '')),
-                prijs: parseFloat(kolommen[5].replace(',', '.')),
+                prijs: isNaN(prijsNummer) ? 0 : prijsNummer,
                 modifiers: modObject
             };
         }).filter(item => item !== null);
 
-        updateDropdowns(0); // Vul de eerste kolom
+        updateDropdowns(0);
         document.getElementById('loader').style.display = 'none';
         document.getElementById('main-ui').style.display = 'block';
     } catch (error) {
         document.getElementById('loader').textContent = "Fout bij laden data.";
-        console.error(error);
     }
 }
 
-// Functie die wordt aangeroepen bij elke klik
 function handleSelectChange(index) {
-    // Wis alle keuzes in de kolommen ná degene die veranderd is
+    // Reset alle dropdowns die ná de gewijzigde dropdown komen
     for (let i = index + 1; i < 5; i++) {
-        document.getElementById(`col${i}`).innerHTML = '';
+        const s = document.getElementById(`col${i}`);
+        s.innerHTML = '';
+        s.value = "";
     }
-    
     updateDropdowns(index + 1);
     updateUI();
 }
 
 function updateDropdowns(startIndex) {
-    // Haal de huidige geselecteerde waarden op
     const huidigeKeuzes = [];
     for (let i = 0; i < 5; i++) {
         huidigeKeuzes.push(document.getElementById(`col${i}`).value);
     }
 
-    // Loop door de dropdowns vanaf de startIndex
     for (let i = startIndex; i < 5; i++) {
         const select = document.getElementById(`col${i}`);
         
-        // Filter de tabelData op basis van wat er in de VORIGE kolommen is gekozen
         const beschikbareData = tabelData.filter(item => {
             for (let j = 0; j < i; j++) {
-                if (huidigeKeuzes[j] && item.kenmerken[j] !== huidigeKeuzes[j]) {
+                if (huidigeKeuzes[j] !== "" && item.kenmerken[j] !== huidigeKeuzes[j]) {
                     return false;
                 }
             }
             return true;
         });
 
-        // Haal unieke opties op uit de gefilterde set
         const opties = [...new Set(beschikbareData.map(item => item.kenmerken[i]))].sort();
         
-        // Vul de dropdown
-        const vorigeWaarde = select.value;
         select.innerHTML = '<option value="">Maak een keuze...</option>';
-        
         opties.forEach(opt => {
             if (opt) {
                 const el = document.createElement('option');
                 el.value = opt;
                 el.textContent = opt;
-                if (opt === vorigeWaarde) el.selected = true;
                 select.appendChild(el);
             }
         });
-
-        // Als er maar 1 optie is (naast de lege), selecteer die dan automatisch? 
-        // Optioneel: select.disabled = (opties.length === 0);
     }
 }
 
@@ -215,41 +207,54 @@ function updateUI() {
         document.getElementById('col4').value
     ];
 
-    // Zoek een exacte match (alleen als alle 5 zijn ingevuld)
+    // Check of alle velden zijn ingevuld
+    const allesGeselecteerd = keuzes.every(k => k !== "");
+    const modList = document.getElementById('modifier-list');
+    const baseDisp = document.getElementById('base-price');
+    const totalDisp = document.getElementById('total-price');
+
+    if (!allesGeselecteerd) {
+        modList.innerHTML = 'Maak eerst alle keuzes...';
+        baseDisp.textContent = "€ 0,00";
+        totalDisp.textContent = "€ 0,00";
+        return;
+    }
+
     const match = tabelData.find(item => 
         item.kenmerken.every((val, index) => val === keuzes[index])
     );
 
-    const modArea = document.getElementById('modifier-area');
-    const modList = document.getElementById('modifier-list');
-    const baseDisp = document.getElementById('base-price');
-
     if (match) {
         baseDisp.textContent = `€ ${match.prijs.toLocaleString('nl-NL', {minimumFractionDigits: 2})}`;
-        modArea.style.display = 'block';
         
-        modList.innerHTML = '';
-        for (let [naam, perc] of Object.entries(match.modifiers)) {
-            const div = document.createElement('div');
-            div.className = 'modifier-item';
-            div.innerHTML = `
-                <input type="checkbox" class="mod-check" value="${perc}" onchange="recalc(${match.prijs})"> 
-                <span>${naam} (+${perc}%)</span>
-            `;
-            modList.appendChild(div);
+        const modKeys = Object.keys(match.modifiers);
+        if (modKeys.length > 0) {
+            modList.innerHTML = '';
+            modKeys.forEach(naam => {
+                const perc = match.modifiers[naam];
+                const div = document.createElement('div');
+                div.className = 'modifier-item';
+                div.innerHTML = `
+                    <input type="checkbox" class="mod-check" value="${perc}" onchange="recalc(${match.prijs})"> 
+                    <span>${naam} (+${perc}%)</span>
+                `;
+                modList.appendChild(div);
+            });
+        } else {
+            modList.innerHTML = 'Geen extra opties beschikbaar voor deze selectie.';
         }
         recalc(match.prijs);
     } else {
-        modArea.style.display = 'none';
+        modList.innerHTML = 'Geen exacte match gevonden in de database.';
         baseDisp.textContent = "€ 0,00";
-        document.getElementById('total-price').textContent = "€ 0,00";
+        totalDisp.textContent = "€ 0,00";
     }
 }
 
 function recalc(base) {
     let extraPerc = 0;
     document.querySelectorAll('.mod-check:checked').forEach(cb => {
-        extraPerc += parseFloat(cb.value);
+        extraPerc += parseFloat(cb.value) || 0;
     });
 
     const totaal = base * (1 + (extraPerc / 100));
